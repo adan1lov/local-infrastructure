@@ -1,0 +1,62 @@
+---
+- name: Etcd cluster initialization
+  hosts: etcd
+
+  tasks:
+    - name: Update apt cache & upgrade
+      apt:
+        update_cache: yes
+        upgrade: yes
+      when: ansible_os_family == 'Debian'
+
+    - name: Disable swap immediately
+      command: swapoff -a
+      changed_when: false
+
+    - name: Remove swap entries from /etc/fstab
+      lineinfile:
+        path: /etc/fstab
+        state: absent
+        regexp: '^.*swap.*$'
+      register: fstab_modified
+
+    - name: Reboot if fstab was modified
+      reboot:
+        msg: "Reboot to apply fstab changes"
+        connect_timeout: 5
+        reboot_timeout: 600
+      when: fstab_modified.changed
+
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+        state: present
+        filename: "docker-ce"
+      when: ansible_os_family == 'Debian'
+
+    - name: Install Docker and containerd
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
