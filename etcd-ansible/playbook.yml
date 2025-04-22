@@ -60,3 +60,43 @@
         state: present
         update_cache: yes
       when: ansible_os_family == 'Debian'
+
+    - name: Configure containerd for Kubernetes
+      copy:
+        content: |
+          version = 2
+          [plugins."io.containerd.grpc.v1.cri"]
+            sandbox_image = "registry.k8s.io/pause:3.9"
+            [plugins."io.containerd.grpc.v1.cri".containerd]
+              disable_snapshot_annotations = true
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+                runtime_type = "io.containerd.runc.v2"
+                [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+                  SystemdCgroup = true
+        dest: /etc/containerd/config.toml
+        owner: root
+        group: root
+        mode: 0644
+      notify:
+        - restart containerd
+        - restart docker
+
+    - name: Enable and start Docker/containerd
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - docker
+        - containerd
+
+  handlers:
+    - name: restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted
